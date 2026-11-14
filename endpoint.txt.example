@@ -1,0 +1,10 @@
+# endpoint.txt — per-machine endpoint override for the Enrollment App.
+#
+# Copy this file next to enrollment-app.exe, rename it to exactly
+#   endpoint.txt
+# and replace the line below with YOUR Google Apps Script Web App URL
+# (the one ending in /exec). The app reads the first URL line of that
+# file at startup — no rebuilding needed.
+#
+# Lines starting with # are ignored.
+https://script.google.com/macros/s/PASTE_YOUR_DEPLOYMENT_ID_HERE/exec

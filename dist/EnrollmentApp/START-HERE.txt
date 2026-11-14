@@ -1,0 +1,24 @@
+DYCI CME APP - HOW TO USE
+=========================
+
+1. Double-click  run.bat
+   (You can also make a shortcut: right-click run.bat > Send to >
+   Desktop (create shortcut). Use the shortcut from then on.)
+
+2. If Windows shows "Windows protected your PC":
+   click "More info"  >  "Run anyway".  This appears once per PC
+   because the app is not digitally signed - it comes from your own
+   office, so it is safe.
+
+3. The Google endpoint is already built into the app. The optional
+   file endpoint.txt (one line: the /exec URL) can override it without
+   rebuilding. If submissions fail, check that file first.
+
+4. Files next to the exe - do not delete them while enrolling:
+     ca-bundle.crt             needed to reach Google securely
+     subjects.ini              your edited subject lists
+     app.log                   what happened, when
+     failed-submissions.jsonl  enrollments that failed to send
+                               (Wi-Fi down etc.) - the data is not
+                               lost; send them again or paste the
+                               rows into the sheet manually.
