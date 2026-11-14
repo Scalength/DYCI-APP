@@ -14,3 +14,8 @@
 [2026-11-14 22:10:59] submit result: HTTP 200
 [2026-11-14 22:10:59] script that answered: v11
 [2026-11-14 22:10:59] duplicate submission blocked by the server
+[2026-11-14 22:20:01] ---- Enrollment App started ----
+[2026-11-14 22:20:01] DYCI CME APP v2.9 — endpoint: endpoint.txt
+[2026-11-14 22:20:24] submitting "Deez, Nuts M." (BSMaRE year 1, 7 subjects)…
+[2026-11-14 22:20:36] submit result: HTTP 200
+[2026-11-14 22:20:36] script that answered: v11
