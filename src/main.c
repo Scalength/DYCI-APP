@@ -938,7 +938,7 @@ static void activate(GtkApplication *app, gpointer user_data)
     gtk_entry_set_max_length(w->contact, CONTACT_MAX - 1);
 
     w->committee = GTK_ENTRY(info_row(grid, 11, "Enrollment committee:", gtk_entry_new()));
-    gtk_entry_set_placeholder_text(w->committee, "e.g. Committee 1");
+    gtk_entry_set_placeholder_text(w->committee, "e.g. Sir Marvin");
 
     /* Highlight (optional): paints the student's whole row in the
      * sheet — e.g. YELLOW while a record has an error, GREEN once it
