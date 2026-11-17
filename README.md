@@ -1,4 +1,4 @@
-# DYCI CME APP v2.9 (C + GTK3 → Google Sheets)
+# DYCI CME APP v3.0 (C + GTK3 → Google Sheets)
 
 A native desktop window (written in C) for enrollment committees.
 Branded **DYCI CME APP**: the DYCI seal is embedded in the executable
@@ -19,7 +19,8 @@ title** — the fields start right at the top of the clean white window.
 2. Pick **Course + Year level** — the subject list for that program-year
    appears automatically, each subject with its own
    **ENROLLED / NOT ENROLLED** dropdown.
-3. **Submit** — one row lands in the matching sheet tab.
+3. **Submit** — one row lands in the matching sheet tab (one tab per
+   section, e.g. `BSMT-1 | A1A`).
 
 Subject lists are editable in-app (add/remove per program-year) and persist
 in a `subjects.ini` file next to the executable. Defaults are the six
@@ -31,15 +32,21 @@ program-year lists below.
 │  enrollment.c (validate) │ ◄──────────────────────────────  Web App
 │  subjects.c   (catalog)  │        {"status":"ok"}              │
 │  sheets_gateway.c (curl) │                                     ▼
-└──────────────────────────┘    Six tabs: BSMaRE-1..3, BSMT-1..3 —
-                                 each with its own SUBJECT TALLY block
-                                 (per-subject counts, right of the data)
+└──────────────────────────┘    One tab per section: `BSMT-1 | A1A`,
+                                 `BSMT-1 | A1B`, … — each with its own
+                                 SUBJECT TALLY block (per-subject
+                                 counts, right of the data)
 ```
 
 ## Sheet layout
 
-Rows go to the tab `COURSE-YEAR` (e.g. `BSMT-1`); the tab is created on
-first submission. Columns:
+Rows go to the tab `COURSE-YEAR | SECTION` (e.g. `BSMT-1 | A1A`); the
+tab is created on first submission. **New in v3.0 (Code.gs v12):** the
+tab is per section instead of per year, so every section gets its own
+rows and its own 40-slot quota — A1A and A1B never share a tab or a
+limit. Tabs from the old per-year layout (`BSMT-1`, `BSMaRE-1`, …) are
+kept exactly as they are: new submissions never write into them, and
+the menu fixer still heals them if needed. Columns:
 
 | # | Column | Source |
 |---|---|---|
@@ -49,7 +56,7 @@ first submission. Columns:
 | 4 | GENDER | MALE / FEMALE |
 | 5 | COURSE | BSMaRE / BSMT |
 | 6 | YEAR LEVEL | 1 / 2 / 3 |
-| 7 | SECTION | typed |
+| 7 | SECTION | typed (e.g. `A1A`) — also names the tab |
 | 8 | CONTACT NUMBER | typed (7–15 digits) |
 | 9 | ENROLLMENT COMMITTEE | typed |
 | 10 | STATUS 1 | picked in the app: OLD / NEW (sheet dropdown too) |
@@ -66,15 +73,17 @@ interface. STATUS 1 and STATUS 2 arrive filled from the app's two
 dropdowns under the Student ID box; the committee can still correct a
 cell later by picking the other value in the sheet.
 
-Upgrading an old tab? The script cleans it automatically on the next
-submission — **on demand** via the menu, and since v6 **even a duplicate
-submission finishes the repair** (the healing runs before the duplicate
-guard, so re-submitting a student who is already logged today still fixes
-the tab; it just doesn't add a second row). Once the current Code.gs is
-saved in the Apps Script editor, the spreadsheet shows a menu
-**DYCI CME APP → Fix columns & dropdowns now** that heals every tab
-immediately, with no submission needed and no redeploy needed. Healing
-does the following:
+Upgrading an old tab? A submission heals the tab it writes to before
+the row is added — **on demand** via the menu, and since v6 **even a
+duplicate submission finishes the repair** (the healing runs before the
+duplicate guard, so re-submitting a student who is already logged today
+still fixes the tab; it just doesn't add a second row). Legacy per-year
+tabs from before v12 are never written by new submissions, so heal them
+with the menu: once the current Code.gs is saved in the Apps Script
+editor, the spreadsheet shows a menu **DYCI CME APP → Fix columns &
+dropdowns now** that heals EVERY tab immediately — per-year and
+per-section alike — with no submission needed and no redeploy needed.
+Healing does the following:
 
 - the **DATE 2** column is dropped (DATE keeps the one timestamp);
 - **`[OBJECT OBJECT]` subject columns** (left behind by an older
@@ -98,19 +107,20 @@ does the following:
 Running the fix twice changes nothing (it is idempotent) and a summary
 toast reports what was fixed per tab.
 
-## Subject tally on every year tab + the 40-per-subject limit (v11)
+## Subject tally on every tab + the 40-per-section limit (v11, per section since v12)
 
-Every year tab carries its own **SUBJECT TALLY** block, written to the
-RIGHT of the data columns with one blank column in between (on BSMaRE-1
-that is columns U–Y). One row per subject of that tab:
+Every tab carries its own **SUBJECT TALLY** block, written to the
+RIGHT of the data columns with one blank column in between (on
+`BSMT-1 | A1A` that is columns U–Y). One row per subject of that tab:
 
 | SUBJECT | ENROLLED | NOT ENROLLED | SLOTS LEFT | STATUS |
 |---|---|---|---|---|
 | THERMO | 40 | 12 | 0 | FULL |
 | MECH | 17 | 3 | 23 | OPEN |
 
-- Each tab counts only itself — **BSMaRE-1, BSMaRE-2, BSMaRE-3 and the
-  BSMT tabs all keep independent tallies** of their own subjects.
+- Each tab counts only itself — **every section tab keeps an
+  independent tally** of its own subjects: A1A and A1B never share
+  counts, and neither do different years.
 - **ENROLLED / NOT ENROLLED** count the student rows of that tab whose
   subject cell holds that value; **SLOTS LEFT** is `40 − ENROLLED`.
 - The block is rebuilt from the data after **every** submission and
@@ -124,12 +134,14 @@ that is columns U–Y). One row per subject of that tab:
   submission is REJECTED — nothing is written — and the app shows the
   reason in red on its status line:
   “Not saved — the spreadsheet rejected this submission. Reason:
-  LIMIT REACHED: NAV 2 is full (40/40 ENROLLED) on BSMT-1. No row was
-  added. …” The form is not cleared, so the pick can be changed and
-  resent. NOT ENROLLED entries never count against the cap, and each
-  course-year tab has its own quota (BSMT-1 filling NAV 2 does not
-  affect BSMT-2). The script serializes submissions with LockService,
-  so two simultaneous posts cannot both slip past the limit.
+  LIMIT REACHED: NAV 2 is full (40/40 ENROLLED) on BSMT-1 | A1A. No row
+  was added. …” The form is not cleared, so the pick can be changed and
+  resent. NOT ENROLLED entries never count against the cap, and every
+  section tab has its own quota — `BSMT-1 | A1A` filling NAV 2 does not
+  affect `BSMT-1 | A1B` (put the next student in A1B and the subject
+  has its 40 slots again), nor another year. The script serializes
+  submissions with LockService, so two simultaneous posts cannot both
+  slip past the limit.
 - To change the capacity or disable it: edit `SUBJECT_LIMIT = 40` at
   the top of `Code.gs` (`0` disables the limit entirely), save, and
   deploy a new version (Manage deployments → ✏ → New version).
@@ -181,7 +193,7 @@ to ENROLLED — set statuses *after* picking the program-year. The
    app", click **Advanced → Go to … (unsafe)**; it's your own script.
 4. Copy the **Web App URL** (`.../exec`) and open it in a browser. It
    shows a **status page** with three things to check:
-   - `— code v11` — anything else means the old code is still deployed;
+   - `— code v12` — anything else means the old code is still deployed;
    - **Bound spreadsheet: …** + URL — must be the sheet you are
      checking; if it names a different spreadsheet, the code was
      pasted into the wrong script project;
@@ -189,7 +201,7 @@ to ENROLLED — set statuses *after* picking the program-year. The
      the exact problems still present (DATE 2, `[OBJECT OBJECT]`,
      missing STUDENT ID / subject columns).
    Since v7 every submission reply also carries a version tag (now
-   `"ver":"v11"`) — the app compares it after each submit and warns on
+   `"ver":"v12"`) — the app compares it after each submit and warns on
    its status line when an older script answered.
 5. **Already deployed v1–v4?** This is the step people miss: use
    **Deploy → Manage deployments → ✏ (pencil) → Version: New version →
@@ -207,9 +219,10 @@ to ENROLLED — set statuses *after* picking the program-year. The
    rebuild needed.** Editing the spreadsheet itself (renaming it, moving
    it to another Drive folder) changes nothing; only replacing the
    script or creating a different spreadsheet does.
-8. Nothing else to set up: the script creates each course-year tab
-   (`BSMT-1`, …), the header row and the dropdowns (STATUS 1, STATUS 2
-   and every subject column) automatically on the first submission.
+8. Nothing else to set up: the script creates each section tab
+   (`BSMT-1 | A1A`, …), the header row and the dropdowns (STATUS 1,
+   STATUS 2 and every subject column) automatically on the first
+   submission.
    Since v8 it also formats every tab on each submit: bold
    **centered** header row, **left-aligned**, vertically centered data
    rows — including rows written earlier by an older script. (Want the
@@ -265,10 +278,10 @@ Prerequisites:
 ## Step 3 — Verify without the GUI
 
 ```sh
-./test_gateway "Dela Cruz" "Juan" "M" "2026-0001" "MALE" "BSMT" "1" "A" \
+./test_gateway "Dela Cruz" "Juan" "M" "2026-0001" "MALE" "BSMT" "1" "A1A" \
                "09171234567" "Committee 1" "NAV 2,SEAM 2" "OLD" "REGULAR"
-# Success (HTTP 200). Check the BSMT-1 tab — new row with STUDENT ID
-# 2026-0001, STATUS 1 OLD, STATUS 2 REGULAR, and ENROLLED under NAV 2
+# Success (HTTP 200). Check the BSMT-1 | A1A tab — new row with STUDENT
+# ID 2026-0001, STATUS 1 OLD, STATUS 2 REGULAR, and ENROLLED under NAV 2
 # and SEAM 2. (The last two arguments are optional and default to
 # OLD / REGULAR.)
 ```
@@ -361,15 +374,15 @@ settings survive updates.
 | `Network error (curl code -6/-7/-28)` | No internet, firewall, or proxy blocking `script.google.com`. |
 | `HTTP 401/403` | Access isn't **Anyone**, you're using a `/dev` URL, or the app's `APP_TOKEN` doesn't match `SECRET` in Code.gs. |
 | “Already submitted today…” note | Duplicate guard: this STUDENT ID (or NAME + SECTION) already has a row today. Intentional second enrolment? Set `BLOCK_DUPLICATES = false` in Code.gs. |
-| App says “Not saved — the spreadsheet rejected this submission. Reason: LIMIT REACHED: …” | A subject picked ENROLLED hit the 40-per-subject hard cap on that course-year tab. Mark it NOT ENROLLED for this student, or raise the cap: edit `SUBJECT_LIMIT` at the top of Code.gs, then Deploy → Manage deployments → ✏ → New version. The SUBJECT TALLY block on that year tab shows every subject's count. |
+| App says “Not saved — the spreadsheet rejected this submission. Reason: LIMIT REACHED: …” | A subject picked ENROLLED hit the 40-per-subject hard cap on that section tab. Mark it NOT ENROLLED for this student, put the next student in another section (each section tab has its own 40 slots), or raise the cap: edit `SUBJECT_LIMIT` at the top of Code.gs, then Deploy → Manage deployments → ✏ → New version. The SUBJECT TALLY block on that section tab shows every subject's count. |
 | A submission vanished (Wi-Fi died) | It's in `failed-submissions.jsonl` next to the exe — re-submit or paste into the sheet. |
 | What happened on a staff PC? | Open `app.log` next to the exe — every submit, result and error is timestamped there. |
-| Row landed in the wrong tab | Course/Year in the app define the tab (`BSMaRE-1`…`BSMT-3`). |
-| Subject column missing | Columns are created from the subject list on the next submission — submit once for that course-year (or run the DYCI CME APP menu fix). |
+| Row landed in the wrong tab | Course/Year **and Section** define the tab (`BSMT-1 | A1A`, …). A typo in the section (e.g. `A1B` vs `AB1`) opens a different tab — fix or delete the row by hand in the sheet and resubmit. Lowercase sections are folded onto the same tab (`a1a` → `A1A`), so case alone never splits a section. |
+| Subject column missing | Columns are created from the subject list on the next submission — submit once for that section (or run the DYCI CME APP menu fix). |
 | `student_id is required` | The Student ID box was left empty — fill it in and submit again. Any text is accepted; only emptiness is rejected. |
 | `Pick STATUS 1 (OLD or NEW).` / `Pick STATUS 2 (REGULAR or IRREGULAR).` | One of the two dropdowns under the Student ID box was left empty — pick both and submit again. They start empty on purpose so no wrong default is recorded. |
-| App says “Saved — BUT an OLD spreadsheet script answered” (or “… is v10, expects v11”) | Your submission reached an OLD Code.gs — that old script is what ignores Student ID, re-creates DATE 2 and writes subjects without labels. In the script editor: **Deploy → Manage deployments → ✏ → Version: New version → Deploy** (same URL, new code). Then submit again — the warning must disappear. If you had used **New deployment** instead, the URL changed: paste the NEW `/exec` URL into `endpoint.txt` next to the app. |
-| Sheet still shows DATE 2 / `[OBJECT OBJECT]` after updating | The fixes live in Code.gs — open your `/exec` URL in a browser and read the v11 status page. It says `code v11` only if the new code is really live (otherwise: Manage deployments → ✏ → New version), shows which spreadsheet the script is bound to (a different name = pasted into the wrong project — open YOUR sheet → Extensions → Apps Script and paste it THERE, replacing the entire file), and marks every tab OK / NEEDS FIX. Then click **DYCI CME APP → Fix columns & dropdowns now**, or just submit once from the app — the next submission heals the tab first, even if the student is a duplicate. |
+| App says “Saved — BUT an OLD spreadsheet script answered” (or “… is v11, expects v12”) | Your submission reached an OLD Code.gs — that old script is what ignores Student ID, re-creates DATE 2, writes subjects without labels and piles every section into one per-year tab. In the script editor: **Deploy → Manage deployments → ✏ → Version: New version → Deploy** (same URL, new code). Then submit again — the warning must disappear. If you had used **New deployment** instead, the URL changed: paste the NEW `/exec` URL into `endpoint.txt` next to the app. |
+| Sheet still shows DATE 2 / `[OBJECT OBJECT]` after updating | The fixes live in Code.gs — open your `/exec` URL in a browser and read the v12 status page. It says `code v12` only if the new code is really live (otherwise: Manage deployments → ✏ → New version), shows which spreadsheet the script is bound to (a different name = pasted into the wrong project — open YOUR sheet → Extensions → Apps Script and paste it THERE, replacing the entire file), and marks every tab OK / NEEDS FIX. Then click **DYCI CME APP → Fix columns & dropdowns now** (it heals every tab, including the old per-year ones), or just submit once from the app — the submission heals the tab it writes to first, even if the student is a duplicate. |
 | A `[OBJECT OBJECT]` column appeared | An older app version once posted to an older script. Run **DYCI CME APP → Fix columns & dropdowns now**: if the junk column count matches the subject list it is rescued into named subject columns (values converted), otherwise it is removed and rebuilt on the next submission. |
 | Rows don't keep their highlight | Highlights live in the **HIGHLIGHT** column: the next submission or **DYCI CME APP → Fix columns & dropdowns now** re-paints every row from that column. A blank cell never changes the fill, so you can still paint rows by hand; picking NONE clears the row's fill. |
 | `subjects.ini has an unknown section…` | The file was edited by hand and broke — delete it to regenerate. |

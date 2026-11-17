@@ -104,8 +104,8 @@ int main(int argc, char **argv)
 
     if (status == 200) {
         printf("Success (HTTP 200). Server said: %s\n"
-               "Check the %s-%s tab — a new row should be there.\n",
-               body[0] ? body : "(empty)", e.course, e.year_level);
+               "Check the %s-%s | %s tab — a new row should be there.\n",
+               body[0] ? body : "(empty)", e.course, e.year_level, e.section);
     } else if (status < 0) {
         printf("Network error (curl code %ld). Nothing was sent.\n", status);
     } else {

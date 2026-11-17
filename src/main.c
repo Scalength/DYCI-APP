@@ -873,11 +873,11 @@ static void activate(GtkApplication *app, gpointer user_data)
     gtk_box_pack_start(GTK_BOX(page), frame1, FALSE, FALSE, 0);
 
     w->last_name = GTK_ENTRY(info_row(grid, 0, "Last name:", gtk_entry_new()));
-    gtk_entry_set_placeholder_text(w->last_name, "e.g. Dazal");
+    gtk_entry_set_placeholder_text(w->last_name, "e.g. Dela Cruz");
     w->first_name = GTK_ENTRY(info_row(grid, 1, "First name:", gtk_entry_new()));
-    gtk_entry_set_placeholder_text(w->first_name, "e.g. Sean Kenneth");
+    gtk_entry_set_placeholder_text(w->first_name, "e.g. Juan");
     w->middle_initial = GTK_ENTRY(info_row(grid, 2, "Middle initial:", gtk_entry_new()));
-    gtk_entry_set_placeholder_text(w->middle_initial, "e.g. J (optional)");
+    gtk_entry_set_placeholder_text(w->middle_initial, "e.g. M (optional)");
     gtk_entry_set_max_length(w->middle_initial, 3);
 
     w->student_id = GTK_ENTRY(info_row(grid, 3, "Student ID:", gtk_entry_new()));
@@ -931,14 +931,14 @@ static void activate(GtkApplication *app, gpointer user_data)
     info_row(grid, 8, "Year level:", year_combo);
 
     w->section = GTK_ENTRY(info_row(grid, 9, "Section:", gtk_entry_new()));
-    gtk_entry_set_placeholder_text(w->section, "e.g. A");
+    gtk_entry_set_placeholder_text(w->section, "e.g. A1A");
 
     w->contact = GTK_ENTRY(info_row(grid, 10, "Contact number:", gtk_entry_new()));
     gtk_entry_set_placeholder_text(w->contact, "e.g. 0917 123 4567");
     gtk_entry_set_max_length(w->contact, CONTACT_MAX - 1);
 
     w->committee = GTK_ENTRY(info_row(grid, 11, "Enrollment committee:", gtk_entry_new()));
-    gtk_entry_set_placeholder_text(w->committee, "e.g. Sir Marvin");
+    gtk_entry_set_placeholder_text(w->committee, "e.g. Committee 1");
 
     /* Highlight (optional): paints the student's whole row in the
      * sheet — e.g. YELLOW while a record has an error, GREEN once it
