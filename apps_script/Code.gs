@@ -17,7 +17,7 @@
  *      point at the old /exec link keep running the OLD code forever.
  *      Same deployment + "New version" = same URL, new code.
  *   6. Verify: open the /exec URL in a browser. The status page must
- *      say "code v12" AND show your spreadsheet's name plus the header
+ *      say "code v13" AND show your spreadsheet's name plus the header
  *      health of every enrollment tab. Old text, an error, or the
  *      wrong spreadsheet name = the wrong code (or the wrong script
  *      project) is what's deployed.
@@ -52,14 +52,21 @@
  *   repair of a legacy tab (DATE 2 / [OBJECT OBJECT] gone, STUDENT ID
  *   and subject columns in place, dropdowns applied).
  *
- * Behavior (v7; presentation added in v8, per-section tabs in v12):
- *   - One TAB PER SECTION (v12), named  <COURSE>-<YEAR> | <SECTION>
- *     e.g. "BSMaRE-1 | A1A", "BSMT-3 | B". Tabs are created
- *     automatically on first submission. The old per-year layout
- *     (<COURSE>-<YEAR>, e.g. "BSMaRE-1") is not migrated and not
- *     touched — existing year tabs keep their rows; only NEW
- *     submissions open section tabs. The subject lists for a section
- *     tab come from its course-year part (see DEFAULT_SUBJECTS).
+ * Behavior (v7; presentation added in v8, per-section tabs in v12,
+ * section-only tab names in v13):
+ *   - One TAB PER SECTION (v12). Since v13 the tab is named after the
+ *     SECTION ALONE — "A1A", "A1B", "A1C", … — with no course-year
+ *     prefix. Tabs are created automatically on the first submission.
+ *     The course and year are still required and still fill their own
+ *     columns, so no data is lost; the subject lists for a tab come
+ *     from the COURSE + YEAR LEVEL values in its rows (see
+ *     DEFAULT_SUBJECTS). NOTE: two course-years that use the SAME
+ *     section name (e.g. BSMaRE-1 A1A and BSMT-1 A1A) share ONE tab —
+ *     and with it one 40-slot quota per shared subject such as
+ *     PATHFIT 2. Older layouts are not migrated and not touched:
+ *     existing per-year tabs ("BSMaRE-1") and v12 tabs
+ *     ("BSMaRE-1 | A1A") keep their rows; only NEW submissions open
+ *     the plain section tabs.
  *   - Fixed columns: DATE, STUDENT ID, NAME, GENDER, COURSE, YEAR LEVEL,
  *     SECTION, CONTACT NUMBER, ENROLLMENT COMMITTEE, STATUS 1,
  *     STATUS 2 — then one column per subject. DATE keeps the single
@@ -92,10 +99,9 @@
  *     SUBJECT_LIMIT (40) is a HARD cap: when a subject the app marks
  *     ENROLLED already has that many enrollments on the tab, the
  *     submission is REJECTED and the app shows the reason — no row,
- *     no partial write. Since v12 a tab is ONE SECTION, so each
- *     section (e.g. BSMaRE-1 | A1A, BSMaRE-1 | A1B) gets its own
- *     40-slot quota per subject instead of sharing one across the
- *     whole year. LockService serializes submissions so two
+ *     no partial write. Since v13 a tab is named after the section
+ *     alone (A1A, A1B, …), so each section keeps its own 40-slot
+ *     quota per subject instead of sharing one across the whole year. LockService serializes submissions so two
  *     simultaneous posts cannot both slip past the limit. (v10 kept
  *     the tally on a separate tab; that tab is deleted automatically
  *     once this version runs.)
@@ -120,7 +126,7 @@
  *     reaches the sheet.
  */
 
-const CODE_VERSION = 'v12';
+const CODE_VERSION = 'v13';
 const SECRET = '';            // e.g. 'marE-2026-key'; same as APP_TOKEN in src/config.h
 const BLOCK_DUPLICATES = true;
 const SUBJECT_VALUES = ['ENROLLED', 'NOT ENROLLED'];
@@ -130,13 +136,15 @@ const STATUS1_VALUES = ['OLD', 'NEW'];
 const STATUS2_VALUES = ['REGULAR', 'IRREGULAR'];
 
 // Hard capacity per subject (v10; per section since v12): at most
-// SUBJECT_LIMIT rows on one tab — one course-year | section, e.g.
-// "BSMaRE-1 | A1A" — may say ENROLLED for the same subject. The next
-// submission that would push a subject past the limit is rejected
-// with a clear message the app shows — nothing is written. The same
-// subject on another section (or another course-year) keeps its own
-// quota. Entries marked NOT ENROLLED never count against the cap.
-// Set 0 (or any negative number) to disable the limit entirely.
+// SUBJECT_LIMIT rows on one tab — one SECTION since v13 (e.g. "A1A") —
+// may say ENROLLED for the same subject. The next submission that
+// would push a subject past the limit is rejected with a clear message
+// the app shows — nothing is written. Another section tab keeps its
+// own quota. NOTE: because the tab is named after the section alone,
+// two course-years that use the same section name share the tab and
+// therefore the quota of any subject they have in common (PATHFIT 2,
+// NGEC 8, ...). Entries marked NOT ENROLLED never count against the
+// cap. Set 0 (or any negative number) to disable the limit entirely.
 const SUBJECT_LIMIT = 40;
 
 // The per-tab tally block (v11): rebuilt after every submission and
@@ -237,16 +245,18 @@ function handleSubmit_(d) {
       return reply({ status: 'error', message: 'course or year_level missing' });
     }
 
-    // v12: one tab per SECTION — "BSMaRE-1 | A1A", "BSMaRE-1 | A1B", …
-    // — so the 40-slot quota applies to each section on its own instead
-    // of piling every section of the year into one "BSMaRE-1" tab.
-    // Section is already a required form field; it must also survive
-    // tab-name sanitization (a "/" alone cannot name a tab).
+    // v13: one tab per SECTION, named after the section ALONE — "A1A",
+    // "A1B", … — instead of "BSMaRE-1 | A1A" (v12) or "BSMaRE-1" (v11
+    // and earlier). The 40-slot quota applies to each section on its
+    // own. Course and year stay required: they fill their own columns
+    // on the row and pick the tab's subject lists (DEFAULT_SUBJECTS is
+    // looked up from the COURSE + YEAR LEVEL values in the rows, since
+    // the name no longer carries them).
     const sectionTab = sectionTabPart_(d.section);
     if (!sectionTab) {
       return reply({ status: 'error', message: 'section missing' });
     }
-    const tabName = course + '-' + year + ' | ' + sectionTab;
+    const tabName = sectionTab;
 
     // STUDENT ID: required, free-form text — no format is enforced
     // (e.g. 2026-0000, 2026-053043, or any office-specific scheme).
@@ -382,9 +392,8 @@ function handleSubmit_(d) {
     // Hard limit (v10): reject the submission when a subject the app
     // marked ENROLLED is already at SUBJECT_LIMIT on this tab. Nothing
     // is written — the app shows the reason to the committee. The
-    // count is per TAB — one course-year | section since v12 — so the
-    // same subject used by another section or another year keeps its
-    // own quota.
+    // count is per TAB — one section since v13 — so another section
+    // tab keeps its own quota.
     if (SUBJECT_LIMIT > 0) {
       const counts = countSubjectStatuses_(sheet, header);
       const full = [];
@@ -449,7 +458,7 @@ function handleSubmit_(d) {
 /**
  * Status page for checking the deployment in a browser (v6, kept
  * since). Answers:
- *   1. WHICH code is live — after a redeploy it must say "code v12".
+ *   1. WHICH code is live — after a redeploy it must say "code v13".
  *   2. WHICH spreadsheet this script writes to (name + URL) — if that
  *      is not the sheet you are checking, the script was pasted into
  *      a different project than the one bound to your sheet.
@@ -485,18 +494,18 @@ function doGet() {
     if (header.indexOf('DATE') === -1 || header.indexOf('NAME') === -1) {
       return; // not an enrollment tab
     }
-    tabs.push({ name: sheet.getName(), header: header });
+    tabs.push({ sheet: sheet, name: sheet.getName(), header: header });
   });
 
   if (!tabs.length) {
     out.push('No enrollment tabs yet. Tabs are created automatically on the');
-    out.push('first submission, named Course-Year | Section (e.g. "BSMaRE-1 | A1A").');
+    out.push('first submission, named after the section (e.g. "A1A").');
     return textOutput_(out.join('\n'));
   }
 
   out.push('Enrollment tabs and their current header health:');
   tabs.forEach(function (t) {
-    const problems = tabProblems_(t.name, t.header);
+    const problems = tabProblems_(t.sheet, t.header);
     out.push('');
     out.push('  ' + t.name + (problems.length ? ' — NEEDS FIX' : ' — OK'));
     if (problems.length) {
@@ -509,7 +518,7 @@ function doGet() {
   out.push('');
   out.push('Subject limit: ' + (SUBJECT_LIMIT > 0
     ? SUBJECT_LIMIT + ' ENROLLED per subject, per section tab ' +
-      '(Course-Year | Section).'
+      '(tabs are named after the section, e.g. "A1A").'
     : 'disabled (SUBJECT_LIMIT <= 0 in Code.gs).'));
   out.push('Every tab carries its own "' + TALLY_MARKER + '" block right');
   out.push('of the data columns: per-subject ENROLLED, NOT ENROLLED, SLOTS');
@@ -526,7 +535,7 @@ function textOutput_(s) {
 }
 
 /** What is still wrong with one tab's header, for the status page. */
-function tabProblems_(tabName, header) {
+function tabProblems_(sheet, header) {
   const problems = [];
   if (header.indexOf('DATE 2') !== -1) {
     problems.push('still has a DATE 2 column');
@@ -546,7 +555,7 @@ function tabProblems_(tabName, header) {
   ['STATUS 1', 'STATUS 2'].forEach(function (h) {
     if (header.indexOf(h) === -1) problems.push(h + ' column missing');
   });
-  const want = DEFAULT_SUBJECTS[yearKeyForTab_(tabName)];
+  const want = defaultSubjectsForTab_(sheet) || [];
   if (want) {
     const have = want.filter(function (n) { return header.indexOf(n) !== -1; });
     if (have.length < want.length) {
@@ -583,10 +592,9 @@ function fixEnrollmentSheets() {
     const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
       .map(function (h) { return String(h).trim().toUpperCase(); });
     if (header.indexOf('DATE') === -1 || header.indexOf('NAME') === -1) {
-      return; // not an enrollment tab (tabs are named Course-Year | Section)
+      return; // not an enrollment tab (since v13 tabs are named after the section)
     }
-    const subjectNames =
-      DEFAULT_SUBJECTS[yearKeyForTab_(sheet.getName())] || null;
+    const subjectNames = defaultSubjectsForTab_(sheet);
     report.push(sheet.getName() + ': ' + healTab_(sheet, subjectNames));
   });
 
@@ -601,8 +609,8 @@ function fixEnrollmentSheets() {
 
   const msg = report.length
     ? report.join('\n')
-    : 'No enrollment tabs found — tabs are named Course-Year | Section ' +
-      '(e.g. "BSMaRE-1 | A1A").';
+    : 'No enrollment tabs found — tabs are named after the section ' +
+      '(e.g. "A1A").';
   Logger.log(msg);
   try {
     ss.toast(msg, 'DYCI CME APP — sheet fix', 10);
@@ -1035,13 +1043,14 @@ function removeLegacyTallyTab_() {
  */
 function writeTallyBlock_(sheet, header) {
   const counts = countSubjectStatuses_(sheet, header);
-  // The built-in subject list (DEFAULT_SUBJECTS) is keyed by the
-  // course-year part of the tab name — "BSMT-1 | A" tallies the
-  // BSMT-1 list (v12). It comes first so the tally mirrors the app's
-  // form even where a subject has no column yet; extra subject-like
-  // columns that hold entries follow, alphabetically.
-  const tabName = yearKeyForTab_(sheet.getName());
-  const names = (DEFAULT_SUBJECTS[tabName] || []).slice();
+  // The built-in subject lists (DEFAULT_SUBJECTS) are keyed by
+  // "COURSE-YEAR" (v13): the keys are read from the tab's COURSE +
+  // YEAR LEVEL data columns, since the tab name no longer carries the
+  // course-year — a tab named "A1A" tallies whatever course-years its
+  // rows belong to. The matched lists come first so the tally mirrors
+  // the app's form even where a subject has no column yet; extra
+  // subject-like columns that hold entries follow, alphabetically.
+  const names = defaultSubjectsForTab_(sheet) || [];
   Object.keys(counts).sort().forEach(function (n) {
     if (n.indexOf('[OBJECT') === 0 || n === 'UNDEFINED' || n === 'DATE 2') return;
     if (names.indexOf(n) !== -1) return;
@@ -1184,9 +1193,9 @@ function sanitizeToken(v) {
 /** Tab-safe section token for the tab name (v12): Sheets forbids
  *  \ / ? * [ ] : in tab names — those characters are dropped, runs of
  *  whitespace collapse to one space, and the result is UPPERCASED so
- *  "a1a" and "A1A" land on the same tab instead of splitting the year
- *  in two. The SECTION cell keeps exactly what staff typed; this only
- *  names the tab. */
+ *  "a1a" and "A1A" land on the same tab instead of splitting the
+ *  section in two. The SECTION cell keeps exactly what staff typed;
+ *  this only names the tab. */
 function sectionTabPart_(section) {
   return String(section || '')
     .replace(/[\\/?*\[\]:]/g, '')
@@ -1196,11 +1205,52 @@ function sectionTabPart_(section) {
     .slice(0, 40);
 }
 
-/** "BSMaRE-1 | A1A" -> "BSMARE-1": the DEFAULT_SUBJECTS key for the
- *  course-year part of a tab name (v12). Legacy per-year tab names
- *  ("BSMaRE-1") pass through unchanged, so old tabs keep healing. */
+/** "BSMaRE-1 | A1A" -> "BSMARE-1": the DEFAULT_SUBJECTS key hidden in a
+ *  LEGACY tab name (v13 fallback). Section-only names ("A1A") and
+ *  unknown names come back unchanged and simply match nothing. Legacy
+ *  per-year tab names ("BSMaRE-1") pass through unchanged, so old tabs
+ *  keep healing when they hold no data yet. */
 function yearKeyForTab_(tabName) {
   return String(tabName).split('|')[0].trim().toUpperCase();
+}
+
+/** The DEFAULT_SUBJECTS lists that apply to one tab (v13). The keys —
+ *  "BSMARE-1", "BSMT-2", … — are read from the tab's COURSE + YEAR
+ *  LEVEL data columns, because the tab name is the section alone now.
+ *  A tab holding rows of several course-years gets the UNION of their
+ *  lists, in first-seen order. A tab with no usable data rows falls
+ *  back to its NAME (covers the legacy per-year and "Course-Year |
+ *  Section" layouts this script still heals). Returns the uppercase
+ *  subject names in order, or null when nothing matches. */
+function defaultSubjectsForTab_(sheet) {
+  const header = readHeader_(sheet);
+  const courseAt = header.indexOf('COURSE');
+  const yearAt = header.indexOf('YEAR LEVEL');
+  const keys = [];
+  const dataLast = lastDataRow_(sheet, Math.max(1, header.length));
+  if (courseAt !== -1 && yearAt !== -1 && dataLast > 1) {
+    const n = dataLast - 1;
+    const courses = sheet.getRange(2, courseAt + 1, n, 1).getValues();
+    const years = sheet.getRange(2, yearAt + 1, n, 1).getValues();
+    for (let r = 0; r < n; r++) {
+      const c = sanitizeToken(courses[r][0]);
+      const y = sanitizeToken(years[r][0]);
+      if (!c || !y) continue;
+      const key = (c + '-' + y).toUpperCase();
+      if (keys.indexOf(key) === -1) keys.push(key);
+    }
+  }
+  if (!keys.length) {
+    const byName = DEFAULT_SUBJECTS[yearKeyForTab_(sheet.getName())];
+    return byName ? byName.slice() : null;
+  }
+  const names = [];
+  keys.forEach(function (k) {
+    (DEFAULT_SUBJECTS[k] || []).forEach(function (n) {
+      if (names.indexOf(n) === -1) names.push(n);
+    });
+  });
+  return names.length ? names : null;
 }
 
 /** Trim + hard length cap so no hand-crafted payload can bloat a row. */

@@ -18,7 +18,7 @@
  * ── App version ──────────────────────────────────────────────────────
  * Shown in the window title and written to app.log.
  */
-#define APP_VERSION "3.0"
+#define APP_VERSION "3.1"
 
 /*
  * ── Expected spreadsheet-script version ─────────────────────────────
@@ -28,7 +28,7 @@
  * ID, re-creates DATE 2 and writes subjects without labels. Bump this
  * whenever you paste a newer Code.gs.
  */
-#define SHEETS_SCRIPT_VER "v12"
+#define SHEETS_SCRIPT_VER "v13"
 
 /*
  * ── Shared secret (optional, recommended) ────────────────────────────
